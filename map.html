@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>
+    Intro to MapView - Create a 2D map | Sample | ArcGIS Maps SDK for
+    JavaScript 4.26
+  </title>
+  <style>
+    html,
+    body,
+    #viewDiv {
+      margin: 0;
+      padding: 0;
+    }
+
+    #optionsDiv {
+      background-color: white;
+      color: black;
+      padding: 6px;
+      max-width: 300px;
+    }
+
+    #containerDiv {
+      padding: 10px;
+    }
+
+    #histogram-title {
+      font-size: 12pt;
+      text-align: center;
+      padding: 0px 0px 10px 0px;
+    }
+
+    #histogram {
+      width: 200px;
+      height: 200px;
+    }
+
+    #normalization-type {
+      width: 40%;
+    }
+  </style>
+
+  <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css" />
+
+  <script src="https://js.arcgis.com/4.26/"></script>
+
+  <script>
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/FeatureLayer",
+      "esri/widgets/Legend",
+      "esri/widgets/ScaleBar",
+      "esri/widgets/LayerList",
+      "esri/widgets/BasemapGallery",
+      "esri/widgets/Search",
+      "esri/Graphic",
+      "esri/widgets/Sketch",
+      "esri/layers/GraphicsLayer",
+      "esri/widgets/Home",
+      "esri/config"
+    ], (
+      Map,
+      MapView,
+      FeatureLayer,
+      Legend,
+      ScaleBar,
+      LayerList,
+      BasemapGallery,
+      Search,
+      Graphic,
+      Sketch,
+      GraphicsLayer,
+      Home,
+      esriConfig
+    ) => {
+      esriConfig.apiKey ="AAPK8b9543718e834153a0b59e78b97af460ievzmKujL9DfIBNuZhP8tLhJNJnKpUGjpUQup7xaGHUQoa0kZu686G0jgLAG8szA";
+
+      const layer1 = new FeatureLayer({
+        url: "https://www.geosceneonline.cn/server/rest/services/Hosted/粮食产量变化/FeatureServer",
+        outFields: ["*"]
+      });
+      const graphicsLayer = new GraphicsLayer({ title: "绘制自然灾害的范围" });
+      const layer2 = new FeatureLayer({
+        url: "https://www.geosceneonline.cn/server/rest/services/Hosted/中国线状省界/FeatureServer",
+        outFields: ["*"]
+      });
+
+      const map = new Map({
+        basemap: "topo",
+        layers: [layer2, layer1, graphicsLayer]
+      });
+
+
+      const view1 = new MapView({
+        container: "viewDiv",
+        map: map,
+        zoom: 4,
+        center: [120, 30],
+        popup: {
+          autoOpenEnabled: false,
+          dockEnabled: true,
+          dockOptions: {
+            buttonEnabled: false,
+            breakpoint: false,
+            position: "bottom-right"
+          }
+        }
+      });
+
+      const legend1 = new Legend({
+        view: view1,
+        container: Legend1,
+        layerInfos: [{
+          layer: layer1,
+          title: "2015-2019年粮食增长"
+        }]
+      });
+
+      const scaleBar = new ScaleBar({
+        view: view1,
+        style: "ruler",
+        unit: "metric"
+      });
+      view1.ui.add(scaleBar, { position: "bottom-left" });
+
+      const searchWidget = new Search({
+        view: view1,
+        container: search
+      });
+      view1.when(() => {
+        const sketch = new Sketch({
+          layer: graphicsLayer,
+          view: view1,
+          creationMode: "update"
+        });
+        view1.ui.add(sketch, "top-right");
+      });
+      const layerList = new LayerList({
+        view: view1,
+
+        container: basemapDiv
+      });
+
+
+
+      const basemapGallery = new BasemapGallery({
+        view: view1,
+        container: basemapGalleryDiv
+      });
+      const homeWidget = new Home({
+        view: view1
+      });
+      view1.ui.add(homeWidget, "top-left");
+
+
+      view1.whenLayerView(layer1).then(() => {
+        function queryFeaturesList() {
+          layer1
+            .queryFeatures({
+              geometry: view1.extent,
+              spatialRelationship: "intersects",
+              returnGeometry: false,
+              returnQueryGeometry: true,
+              outFields: ["*"]
+            })
+            .then((featureSet) => {
+              view1.popup.open({
+                // location: view1.extent,
+                features: featureSet.features,
+                featureMenuOpen: true
+              });
+              console.log('查询')
+            });
+        }
+        queryFeaturesList();
+
+        let distance = 70;
+        let units = "miles";
+
+        const pointGraphic = new Graphic({
+          symbol: {
+            type: "simple-marker",
+            color: [0, 0, 139],
+            outline: {
+              color: [255, 255, 255],
+              width: 1.5
+            }
+          }
+        });
+        const bufferGraphic = new Graphic({
+          symbol: {
+            type: "simple-fill",
+            color: [173, 216, 230, 0.2],
+            outline: {
+
+              color: [255, 255, 255],
+              width: 1
+            }
+          }
+        });
+
+        layer1.load().then(() => {
+          layer1.popupTemplate = layer1.createPopupTemplate();
+        });
+
+        view1.on("click", (event) => {
+
+          if (view1.graphics.includes(bufferGraphic)) {
+            view1.graphics.remove(bufferGraphic);
+          }
+          if (view1.graphics.includes(pointGraphic)) {
+            view1.graphics.remove(pointGraphic);
+          }
+          clickFeatures(event);
+        });
+
+        function clickFeatures(screenPoint) {
+          const point = view1.toMap(screenPoint);
+          layer1.queryFeatures({
+            geometry: point,
+            distance: distance,
+            units: units,
+            spatialRelationship: "intersects",
+            returnGeometry: false,
+            returnQueryGeometry: true,
+            outFields: ["*"]
+          }).then((featureSet) => {
+            if (featureSet.features.length === 0) {
+              queryFeaturesList();
+              return;
+
+            }
+
+            pointGraphic.geometry = point;
+            view1.graphics.add(pointGraphic);
+            view1.popup.open({
+              location: point,
+              features: featureSet.features,
+              featureMenuOpen: true
+            });
+          });
+        }
+      });
+
+
+
+    });
+  </script>
+
+</head>
+
+<body>
+
+
+  <div id="header"
+    style="position:fixed;width:100%;height:7%;background-color: #FFFAB9;background: url(image/R-C.jpg);">
+    <div id="content" style="position:absolute;color: blue;font-size: 45px;font-family: 华文新魏;left: 2%;top: 16%;">
+      自然灾害对粮食产量的影响</div>
+  </div>
+  <div id="search1" style="position:absolute;right:20px;top: 10px;">
+    <div id="search"></div>
+  </div>
+
+
+  <div id="container" style="position:fixed;width:100%;height:93%;top:7%;">
+    <div id="title" style="position:fixed;width:20%; height:3%;background-color: #FFE08B;top: 7%;">图层列表</div>
+    <div id="content" style="position:fixed;width:20%;overflow: auto;height:18%;background-color: #FFFAB9;top: 10%;">
+      <div id="basemapDiv"></div>
+    </div>
+    <div id="title1" style="position:fixed;width:20%; height:3%; background-color: #FFE08B;top: 27%;">底图</div>
+    <div id="content1" style="position:fixed;width:20%;overflow: auto;height:335px;background-color: #FFFAB9;top: 30%;">
+      <div id="basemapGalleryDiv"></div>
+    </div>
+    <div id="title2" style="position:fixed;top: 66%;width:20%;height:3%;background-color: #FFE08B;">图例</div>
+    <div id="content2" style="position:fixed;top: 69%;width:20%;overflow: auto;height:31%;background-color: #FFFAB9;">
+      <div id="Legend1"></div>
+    </div>
+
+    <div id="viewDiv" style="position:fixed;height:93%;width: 80%;left: 20%;bottom: 0;top: 7%;"></div>
+  </div>
+
+</body>
+
+</html>
